@@ -280,9 +280,10 @@ export function PainelPrincipal({
             </div>
             <h2 className="text-3xl font-black mb-2" style={{ color: COLOR_GREEN }}>Suporte concluído!</h2>
             <p className="text-xl font-semibold" style={{ color: DARK_TEXT }}>{nomeSolicitante(celebrationTicket)}</p>
-            {textoDepartamento(celebrationTicket) && (
-              <p className="text-base mt-1" style={{ color: DARK_TEXT_MUTED }}>{textoDepartamento(celebrationTicket)}</p>
-            )}
+            <div className="mx-auto my-2 w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
+            <p className="text-base" style={{ color: DARK_TEXT_MUTED }}>
+              {textoDepartamento(celebrationTicket) ?? '-'}
+            </p>
             <p className="text-base mt-1" style={{ color: COLOR_BLUE }}>{detalheFerramenta(celebrationTicket)}</p>
           </div>
         </div>
@@ -355,11 +356,12 @@ export function PainelPrincipal({
                   accent={COLOR_GREEN}
                 />
                 <div className="space-y-2 max-w-full">
-                  <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
-                    {textoDepartamentoOuTraco(ticketAtual)}
-                  </p>
                   <p className="font-black leading-tight" style={{ color: DARK_TEXT, fontSize: 'clamp(1rem, 1.6vw, 1.6rem)' }}>
                     {nomeSolicitante(ticketAtual)}
+                  </p>
+                  <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
+                  <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
+                    {textoDepartamentoOuTraco(ticketAtual)}
                   </p>
                   <div className="flex items-center justify-center gap-2">
                     <span className="inline-block w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: COLOR_BLUE }} />
@@ -407,10 +409,13 @@ export function PainelPrincipal({
                 <p className="font-black leading-tight" style={{ color: DARK_TEXT, fontSize: 'clamp(1rem, 1.5vw, 1.5rem)' }}>
                   {nomeSolicitante(ultimoResolvido)}
                 </p>
-                {textoDepartamento(ultimoResolvido) && (
+                <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
+                {textoDepartamento(ultimoResolvido) ? (
                   <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                     {textoDepartamento(ultimoResolvido)}
                   </p>
+                ) : (
+                  <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>-</p>
                 )}
                 <p className="font-semibold" style={{ color: COLOR_BLUE, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                   {detalheFerramenta(ultimoResolvido)}
@@ -532,12 +537,12 @@ export function PainelPrincipal({
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* Header */}
             <div className="grid shrink-0" style={{
-              gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
+              gridTemplateColumns: '0.35fr 1.5fr 0.75fr 0.85fr',
               padding: 'clamp(6px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
               borderBottom: `1px solid ${DARK_BORDER}`,
               background: `${COLOR_BLUE}06`,
             }}>
-              {['Pos.', 'Solicitante', 'Departamento', 'Data/Hora', 'Ferramenta'].map(h => (
+              {['Pos.', 'Solicitante', 'Data/Hora', 'Ferramenta'].map(h => (
                 <p key={h} className="uppercase tracking-wider font-bold" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.5rem, 0.7vw, 0.7rem)' }}>{h}</p>
               ))}
             </div>
@@ -545,7 +550,7 @@ export function PainelPrincipal({
             <div className="flex-1 flex flex-col">
               {fila.slice(0, 5).map((ticket, idx) => (
                 <div key={ticket.id} className="grid items-center transition-colors" style={{
-                  gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
+                  gridTemplateColumns: '0.35fr 1.5fr 0.75fr 0.85fr',
                   padding: 'clamp(5px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
                   borderBottom: `1px solid ${DARK_BORDER}40`,
                   background: idx % 2 === 0 ? 'transparent' : `${COLOR_BLUE}04`,
@@ -561,17 +566,21 @@ export function PainelPrincipal({
                       {hasActiveTicket ? idx + 2 : idx + 1}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <SolicitanteAvatar
                       ticket={ticket}
                       idx={idx}
                       size="clamp(30px, 2.5vw, 40px)"
                     />
-                    <span className="font-semibold truncate" style={{ color: DARK_TEXT, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>{ticket.solicitante}</span>
+                    <div className="flex flex-col min-w-0 gap-0.5">
+                      <span className="font-semibold truncate" style={{ color: DARK_TEXT, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>
+                        {nomeSolicitante(ticket)}
+                      </span>
+                      <span className="truncate font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.8vw, 0.8rem)' }}>
+                        {textoDepartamentoOuTraco(ticket)}
+                      </span>
+                    </div>
                   </div>
-                  <span className="truncate font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>
-                    {textoDepartamentoOuTraco(ticket)}
-                  </span>
                   <span className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{formatDateTime(ticket.criadoEm)}</span>
                   <div className="flex items-center gap-2">
                     <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLOR_BLUE }} />
