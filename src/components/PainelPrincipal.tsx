@@ -607,9 +607,6 @@ export function PainelPrincipal({
             <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
               Resumo por status
             </h2>
-            <p className="text-white/70 mt-0.5" style={{ fontSize: 'clamp(0.45rem, 0.65vw, 0.65rem)' }}>
-              Por Criado em · apenas hoje · zera à meia-noite
-            </p>
           </div>
           <div className="flex-1 flex items-center justify-center" style={{ padding: 'clamp(12px, 1.2vw, 20px)' }}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-5 w-full">
