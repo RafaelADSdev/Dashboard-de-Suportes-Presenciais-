@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 245 91% 26%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+
+    --popover: 245 91% 20%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 205 100% 61%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 245 80% 35%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 245 60% 30%;
+    --muted-foreground: 230 30% 70%;
+
+    --accent: 83 100% 72%;
+    --accent-foreground: 245 91% 26%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 245 60% 35%;
+    --input: 245 60% 35%;
+    --ring: 205 100% 61%;
+
+    --radius: 0.75rem;
+
+    --success: 83 100% 72%;
+    --success-foreground: 245 91% 26%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 245 91% 26%;
+    --info: 205 100% 61%;
+    --info-foreground: 0 0% 100%;
+    --purple: 262 87% 51%;
+    --purple-foreground: 0 0% 100%;
+
+    --sidebar-background: 245 91% 20%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 205 100% 61%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 245 60% 30%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 245 60% 35%;
+    --sidebar-ring: 205 100% 61%;
+
+    --chart-1: 205 100% 61%;
+    --chart-2: 83 100% 72%;
+    --chart-3: 262 87% 51%;
+    --chart-4: 38 92% 55%;
+    --chart-5: 0 72% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, span, div, td, th, button, input, textarea, label {
+    font-family: 'Poppins', sans-serif;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
