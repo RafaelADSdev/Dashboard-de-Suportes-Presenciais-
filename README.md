@@ -1,73 +1,264 @@
-# Welcome to your Lovable project
+# Dashboard de Suportes Presenciais
 
-## Project info
+Painel em tempo real para exibição em TV no salão — fila de atendimento presencial integrada ao **Bitrix24**, com dados sincronizados via **Supabase Realtime**.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Produção:** [dashsuportespresenciais.vercel.app](https://dashsuportespresenciais.vercel.app)  
+**Repositório:** [github.com/RafaelADSdev/Dashboard-de-Suportes-Presenciais-](https://github.com/RafaelADSdev/Dashboard-de-Suportes-Presenciais-)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## Visão geral
 
-**Use Lovable**
+O sistema recebe eventos de deals do Bitrix24 (criação e atualização de estágio), normaliza os dados em uma tabela `tickets` no Supabase e exibe o painel com atualização instantânea — sem refresh manual.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Suporta filtro por superintendência (**Stüpp** / **Nascimento**) e priorização **FIFO** por data de criação.
 
-Changes made via Lovable will be committed automatically to this repo.
+```mermaid
+flowchart LR
+  B[Bitrix24 CRM] -->|ONCRMDEALADD / UPDATE| W[Edge Function<br/>bitrix-webhook]
+  W -->|upsert| DB[(Supabase<br/>tickets)]
+  DB -->|Realtime| P[Painel TV<br/>React + Vite]
+  P --> V[Vercel CDN]
+```
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Funcionalidades
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+| Área | Descrição |
+|------|-----------|
+| **Suporte em andamento** | Ticket ativo centralizado, com departamento e ferramenta |
+| **Último resolvido** | Foto e departamento do solicitante do último atendimento concluído |
+| **Próximos suportes** | Fila ordenada por posição, solicitante, departamento, data/hora e ferramenta |
+| **Resumo por status** | Contadores por estágio (aguardando, em atendimento, etc.) |
+| **Carrossel de informações** | Slides editáveis no próprio painel (texto ou imagem) |
+| **Filtro de superintendência** | Alternância Stüpp / Nascimento no header |
+| **Vídeo de fundo** | Background Hub On com opacidade reduzida |
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Stack
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+| Camada | Tecnologia |
+|--------|------------|
+| Frontend | React 18, TypeScript, Vite |
+| UI | Tailwind CSS, shadcn/ui, Lucide |
+| Backend / dados | Supabase (Postgres + Realtime) |
+| Integração CRM | Bitrix24 via Edge Function (Deno) |
+| Deploy frontend | Vercel |
+| Deploy backend | Supabase Edge Functions |
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Estrutura do projeto
+
+```
+├── src/
+│   ├── components/
+│   │   └── PainelPrincipal.tsx   # UI principal do painel TV
+│   ├── integrations/supabase/    # Cliente e tipos Supabase
+│   ├── lib/
+│   │   ├── tickets-db.ts         # Leitura e mapeamento de tickets
+│   │   ├── priority-engine.ts    # Fila FIFO e posição
+│   │   └── mock-data.ts          # Tipos TypeScript (Ticket, Status…)
+│   ├── pages/Index.tsx
+│   └── assets/                   # Logos, vídeo de fundo
+├── supabase/
+│   ├── functions/bitrix-webhook/ # Webhook Bitrix → Supabase
+│   └── migrations/               # Alterações de schema
+├── vercel.json                   # Rewrite SPA
+└── .env.example                  # Variáveis do frontend
+```
+
+---
+
+## Pré-requisitos
+
+- [Node.js](https://nodejs.org/) 18+ e npm
+- Conta [Supabase](https://supabase.com/) com projeto configurado
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (para deploy da Edge Function)
+- Portal Bitrix24 com permissão para configurar webhooks de saída
+- Conta [Vercel](https://vercel.com/) (deploy do frontend)
+
+---
+
+## Configuração local
+
+### 1. Clonar e instalar
+
+```bash
+git clone https://github.com/RafaelADSdev/Dashboard-de-Suportes-Presenciais-.git
+cd Dashboard-de-Suportes-Presenciais-
+npm install
+```
+
+### 2. Variáveis de ambiente (frontend)
+
+Copie o exemplo e preencha com os dados do seu projeto Supabase:
+
+```bash
+cp .env.example .env
+```
+
+| Variável | Descrição |
+|----------|-----------|
+| `VITE_SUPABASE_URL` | URL do projeto (`https://<ref>.supabase.co`) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Chave publishable (Settings → API) |
+| `VITE_SUPABASE_PROJECT_ID` | ID do projeto (referência) |
+
+### 3. Subir o frontend
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Acesse `http://localhost:5173`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Supabase
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Tabela `tickets`
 
-## What technologies are used for this project?
+Campos principais usados pelo painel:
 
-This project is built with:
+| Coluna | Origem / uso |
+|--------|----------------|
+| `ticket_id` | ID do deal no Bitrix |
+| `solicitante` | Campo `UF_CRM_1749565388` |
+| `solicitante_foto` | Foto do perfil Bitrix |
+| `responsavel` | `ASSIGNED_BY_ID` |
+| `departamento` | Departamento do solicitante (`department.get`) |
+| `ferramenta` | Campo mapeado no webhook |
+| `status` | Estágio do funil (normalizado) |
+| `superintendencia` | Stüpp ou Nascimento |
+| `criado_em` / `resolvido_em` | Timestamps para fila e histórico |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Aplique migrations quando necessário:
 
-## How can I deploy this project?
+```bash
+supabase db push
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Edge Function `bitrix-webhook`
 
-## Can I connect a custom domain to my Lovable project?
+**URL de produção:**
 
-Yes, you can!
+```
+https://<PROJECT_REF>.supabase.co/functions/v1/bitrix-webhook
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Deploy:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+supabase functions deploy bitrix-webhook --no-verify-jwt
+```
+
+> A função usa `verify_jwt: false` porque o Bitrix envia `application/x-www-form-urlencoded`, não JWT do Supabase.
+
+#### Secrets (Supabase Dashboard → Edge Functions → Secrets)
+
+| Secret | Obrigatório | Descrição |
+|--------|-------------|-----------|
+| `BITRIX_INCOMING_WEBHOOK` | Sim | Webhook de entrada Bitrix (crm, user, department) |
+| `BITRIX_APP_TOKEN` | Sim | Token do app Bitrix para validar requisições |
+| `SUPABASE_URL` | Sim | Injetado automaticamente no deploy |
+| `SUPABASE_SERVICE_ROLE_KEY` | Sim | Injetado automaticamente no deploy |
+| `BITRIX_PEDRO_LEAL_USER_ID` | Não | ID do responsável alvo (ex.: `1326`) |
+| `BITRIX_FILTRAR_PEDRO_LEAL` | Não | `true` (padrão) filtra só deals do responsável |
+| `BITRIX_RESPONSAVEL_NOME` | Não | Nome do responsável (padrão: Pedro Leal) |
+| `BITRIX_CATEGORY_ID` | Não | ID do funil CRM (padrão: `54`) |
+| `BITRIX_SUP_NASCIMENTO_DEPT_ID` | Não | Dept. superintendência Nascimento (padrão: `7`) |
+| `BITRIX_SUP_STUBPP_DEPT_ID` | Não | Dept. superintendência Stüpp (padrão: `3`) |
+
+---
+
+## Configuração no Bitrix24
+
+1. Acesse **Aplicativos → Webhooks → Webhook de saída** (ou handler de app local).
+2. Registre os eventos:
+   - `ONCRMDEALADD`
+   - `ONCRMDEALUPDATE`
+3. Aponte a URL para a Edge Function do Supabase.
+4. Garanta que o webhook de **entrada** usado em `BITRIX_INCOMING_WEBHOOK` tenha escopo para:
+   - `crm.deal.get`
+   - `user.get`
+   - `department.get`
+
+### Mapeamentos Bitrix relevantes
+
+| Campo Bitrix | Uso |
+|--------------|-----|
+| `UF_CRM_1749565388` | Solicitante |
+| `ASSIGNED_BY_ID` | Responsável |
+| `UF_DEPARTMENT` | Departamento do perfil do solicitante |
+| Dept. ID `7` | Superintendência Nascimento |
+| Dept. ID `3` | Superintendência Stüpp |
+
+Estágios do funil são convertidos para status internos (`em_atendimento`, `nova_solicitacao`, `concluido`, etc.) pela Edge Function.
+
+---
+
+## Deploy
+
+### Frontend (Vercel)
+
+O projeto está configurado como SPA Vite. Deploy automático a cada push em `main`.
+
+1. Importe o repositório na [Vercel](https://vercel.com/new).
+2. Configure as três variáveis `VITE_*` em **Settings → Environment Variables** (Production e Preview).
+3. Build: `npm run build` · Output: `dist`
+
+Deploy manual via CLI:
+
+```bash
+npx vercel deploy --prod
+```
+
+### Backend (Supabase)
+
+A Edge Function e o banco **não** são deployados pela Vercel. Use sempre o Supabase CLI ou o dashboard para functions e migrations.
+
+---
+
+## Scripts disponíveis
+
+| Comando | Descrição |
+|---------|-----------|
+| `npm run dev` | Servidor de desenvolvimento |
+| `npm run build` | Build de produção |
+| `npm run preview` | Preview do build local |
+| `npm run lint` | ESLint |
+| `npm test` | Testes (Vitest) |
+
+---
+
+## Fluxo de status
+
+```
+nova_solicitacao / aguardando / aguardando_solicitante / validar_ajuste
+        ↓
+   em_atendimento
+        ↓
+   concluido / finalizado
+```
+
+Tickets em status de fila entram na lista **Próximos suportes**, ordenados por `criado_em` (FIFO).
+
+---
+
+## Solução de problemas
+
+| Sintoma | Verificação |
+|---------|-------------|
+| Painel vazio | Confirme `VITE_*` no `.env` ou na Vercel e refaça o build |
+| Dados não atualizam | Realtime habilitado na tabela `tickets` no Supabase |
+| Webhook não grava | Logs em Supabase → Edge Functions → `bitrix-webhook` |
+| Deals ignorados | Filtro `BITRIX_FILTRAR_PEDRO_LEAL` e `BITRIX_CATEGORY_ID` |
+| Erro de API Bitrix | Secret `BITRIX_INCOMING_WEBHOOK` com escopos corretos |
+
+---
+
+## Licença
+
+Projeto privado — Hub Nogueira / uso interno.
