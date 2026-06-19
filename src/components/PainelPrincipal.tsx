@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Ticket, TicketStatus } from '@/lib/mock-data';
+import { isCreatedToday } from '@/lib/date-filters';
 import { PrioritizedTicket } from '@/lib/priority-engine';
 import { Button } from '@/components/ui/button';
 import { User, Headset, ChevronLeft, ChevronRight, Settings, Plus, Trash2, Image, Type, AlertTriangle, RefreshCw, CheckCircle2, FileText, Clock, Zap } from 'lucide-react';
@@ -180,12 +181,12 @@ export function PainelPrincipal({
   }, [slides.length]);
 
   const statusSummary = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const ticketsHoje = allTickets.filter(t => isCreatedToday(t.criadoEm));
     return [
-      { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: HEADER_RESOLVIDO_FILA },
-      { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: STATUS_AGUARDANDO },
-      { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: HEADER_ANDAMENTO },
-      { name: 'Concluídos', value: allTickets.filter(t => { if (!t.resolvidoEm) return false; return new Date(t.resolvidoEm) >= today; }).length, icon: 'check', color: HEADER_ANDAMENTO },
+      { name: 'Nova solicitação', value: ticketsHoje.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: HEADER_RESOLVIDO_FILA },
+      { name: 'Aguardando solicitante', value: ticketsHoje.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: STATUS_AGUARDANDO },
+      { name: 'Em atendimento', value: ticketsHoje.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: HEADER_ANDAMENTO },
+      { name: 'Concluídos', value: ticketsHoje.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: HEADER_ANDAMENTO },
     ];
   }, [allTickets]);
 
@@ -596,6 +597,9 @@ export function PainelPrincipal({
             <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
               Resumo por status
             </h2>
+            <p className="text-white/70 mt-0.5" style={{ fontSize: 'clamp(0.45rem, 0.65vw, 0.65rem)' }}>
+              Por Criado em · apenas hoje · zera à meia-noite
+            </p>
           </div>
           <div className="flex-1 flex items-center justify-center" style={{ padding: 'clamp(12px, 1.2vw, 20px)' }}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-5 w-full">
