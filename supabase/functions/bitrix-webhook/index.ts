@@ -237,6 +237,28 @@ async function getDepartment(
   return info;
 }
 
+async function resolveEquipeDepartamento(
+  auth: BitrixAuth,
+  departmentIds: unknown,
+  cache: Map<string, DeptInfo>
+): Promise<string | null> {
+  const equipes: string[] = [];
+  const fallback: string[] = [];
+
+  for (const depId of extractDepartmentIds(departmentIds)) {
+    const dept = await getDepartment(auth, depId, cache);
+    if (!dept?.name) continue;
+    if (superintendenciaFromDeptName(dept.name)) {
+      fallback.push(dept.name);
+    } else {
+      equipes.push(dept.name);
+    }
+  }
+
+  if (equipes.length) return equipes.join(", ");
+  return fallback.length ? fallback.join(", ") : null;
+}
+
 async function resolveDepartmentNames(
   auth: BitrixAuth,
   departmentIds: unknown,
@@ -293,16 +315,17 @@ async function resolveUser(
   const users = Array.isArray(result) ? result : result ? [result] : [];
   const user = users[0] as {
     NAME?: string;
+    SECOND_NAME?: string;
     LAST_NAME?: string;
     PERSONAL_PHOTO?: string;
     UF_DEPARTMENT?: unknown;
   } | undefined;
   const name = user
-    ? [user.NAME, user.LAST_NAME].filter(Boolean).join(" ").trim()
+    ? [user.NAME, user.SECOND_NAME, user.LAST_NAME].filter(Boolean).join(" ").trim()
     : userId;
   const photo = user?.PERSONAL_PHOTO?.trim() || null;
   const departamento = user
-    ? await resolveDepartmentNames(auth, user.UF_DEPARTMENT, departmentCache)
+    ? await resolveEquipeDepartamento(auth, user.UF_DEPARTMENT, departmentCache)
     : null;
   const superintendencia = user
     ? await resolveSuperintendenciaFromDepartments(auth, user.UF_DEPARTMENT, departmentCache)

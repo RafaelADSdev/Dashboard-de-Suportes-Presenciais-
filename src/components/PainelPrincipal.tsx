@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Ticket, TicketStatus } from '@/lib/mock-data';
 import { isCreatedToday } from '@/lib/date-filters';
+import { formatarNomeExibicao } from '@/lib/format-name';
 import { PrioritizedTicket } from '@/lib/priority-engine';
 import { Button } from '@/components/ui/button';
 import { User, Headset, ChevronLeft, ChevronRight, Settings, Plus, Trash2, Image, Type, AlertTriangle, RefreshCw, CheckCircle2, FileText, Clock, Zap } from 'lucide-react';
@@ -46,9 +47,9 @@ const initialSlides: InfoSlide[] = [
 
 function nomeSolicitante(ticket: Ticket): string {
   const nome = ticket.solicitante?.trim();
-  if (nome && nome !== '-' && nome !== 'Não informado') return nome;
+  if (nome && nome !== '-' && nome !== 'Não informado') return formatarNomeExibicao(nome);
   const corretor = ticket.corretor?.trim();
-  if (corretor && corretor !== '-') return corretor;
+  if (corretor && corretor !== '-') return formatarNomeExibicao(corretor);
   return 'Solicitante não informado';
 }
 
@@ -360,6 +361,9 @@ export function PainelPrincipal({
                     {nomeSolicitante(ticketAtual)}
                   </p>
                   <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
+                  <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.75vw, 0.75rem)' }}>
+                    Equipe/Departamento
+                  </p>
                   <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
                     {textoDepartamentoOuTraco(ticketAtual)}
                   </p>
@@ -410,13 +414,12 @@ export function PainelPrincipal({
                   {nomeSolicitante(ultimoResolvido)}
                 </p>
                 <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-                {textoDepartamento(ultimoResolvido) ? (
-                  <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
-                    {textoDepartamento(ultimoResolvido)}
-                  </p>
-                ) : (
-                  <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>-</p>
-                )}
+                <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.75vw, 0.75rem)' }}>
+                  Equipe/Departamento
+                </p>
+                <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
+                  {textoDepartamentoOuTraco(ultimoResolvido)}
+                </p>
                 <p className="font-semibold" style={{ color: COLOR_BLUE, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                   {detalheFerramenta(ultimoResolvido)}
                 </p>
@@ -537,12 +540,12 @@ export function PainelPrincipal({
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* Header */}
             <div className="grid shrink-0" style={{
-              gridTemplateColumns: '0.35fr 1.5fr 0.75fr 0.85fr',
+              gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
               padding: 'clamp(6px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
               borderBottom: `1px solid ${DARK_BORDER}`,
               background: `${COLOR_BLUE}06`,
             }}>
-              {['Pos.', 'Solicitante', 'Data/Hora', 'Ferramenta'].map(h => (
+              {['Pos.', 'Solicitante', 'Equipe/Departamento', 'Data/Hora', 'Ferramenta'].map(h => (
                 <p key={h} className="uppercase tracking-wider font-bold" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.5rem, 0.7vw, 0.7rem)' }}>{h}</p>
               ))}
             </div>
@@ -550,7 +553,7 @@ export function PainelPrincipal({
             <div className="flex-1 flex flex-col">
               {fila.slice(0, 5).map((ticket, idx) => (
                 <div key={ticket.id} className="grid items-center transition-colors" style={{
-                  gridTemplateColumns: '0.35fr 1.5fr 0.75fr 0.85fr',
+                  gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
                   padding: 'clamp(5px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
                   borderBottom: `1px solid ${DARK_BORDER}40`,
                   background: idx % 2 === 0 ? 'transparent' : `${COLOR_BLUE}04`,
@@ -572,15 +575,13 @@ export function PainelPrincipal({
                       idx={idx}
                       size="clamp(30px, 2.5vw, 40px)"
                     />
-                    <div className="flex flex-col min-w-0 gap-0.5">
-                      <span className="font-semibold truncate" style={{ color: DARK_TEXT, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>
-                        {nomeSolicitante(ticket)}
-                      </span>
-                      <span className="truncate font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.8vw, 0.8rem)' }}>
-                        {textoDepartamentoOuTraco(ticket)}
-                      </span>
-                    </div>
+                    <span className="font-semibold truncate" style={{ color: DARK_TEXT, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>
+                      {nomeSolicitante(ticket)}
+                    </span>
                   </div>
+                  <span className="truncate font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>
+                    {textoDepartamentoOuTraco(ticket)}
+                  </span>
                   <span className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{formatDateTime(ticket.criadoEm)}</span>
                   <div className="flex items-center gap-2">
                     <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLOR_BLUE }} />
