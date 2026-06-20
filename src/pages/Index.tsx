@@ -3,6 +3,7 @@ import { priorizarFila, getEmAtendimento } from '@/lib/priority-engine';
 import { PainelPrincipal } from '@/components/PainelPrincipal';
 import { fetchTickets, subscribeTickets } from '@/lib/tickets-db';
 import type { Ticket } from '@/lib/mock-data';
+import { filterTicketsCreatedToday, scheduleMidnightReset } from '@/lib/date-filters';
 import { Loader2 } from 'lucide-react';
 
 export default function Index() {
@@ -11,17 +12,13 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const [atendimentoAtual, setAtendimentoAtual] = useState<string | null>(null);
   const [superintendencia, setSuperintendencia] = useState<string>('Stüpp');
+  const [diaPainel, setDiaPainel] = useState(() => Date.now());
 
   const loadTickets = useCallback(async () => {
     try {
       const data = await fetchTickets();
       setTickets(data);
       setError(null);
-
-      const emAtend = data.filter(t => t.status === 'em_atendimento');
-      setAtendimentoAtual(prev =>
-        prev && data.some(t => t.id === prev && t.status === 'em_atendimento') ? prev : emAtend[0]?.id ?? null
-      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar tickets';
       setError(message);
@@ -37,10 +34,31 @@ export default function Index() {
     });
   }, [loadTickets]);
 
-  const filteredTickets = useMemo(
-    () => tickets.filter(t => t.superintendencia === superintendencia),
-    [tickets, superintendencia]
+  useEffect(() => {
+    return scheduleMidnightReset(() => {
+      setDiaPainel(Date.now());
+      loadTickets();
+    });
+  }, [loadTickets]);
+
+  const ticketsHoje = useMemo(
+    () => filterTicketsCreatedToday(tickets),
+    [tickets, diaPainel]
   );
+
+  const filteredTickets = useMemo(
+    () => ticketsHoje.filter(t => t.superintendencia === superintendencia),
+    [ticketsHoje, superintendencia]
+  );
+
+  useEffect(() => {
+    const emAtend = filteredTickets.filter(t => t.status === 'em_atendimento');
+    setAtendimentoAtual(prev =>
+      prev && filteredTickets.some(t => t.id === prev && t.status === 'em_atendimento')
+        ? prev
+        : emAtend[0]?.id ?? null
+    );
+  }, [filteredTickets]);
 
   const fila = useMemo(() => priorizarFila(filteredTickets), [filteredTickets]);
   const emAtendimento = useMemo(() => getEmAtendimento(filteredTickets), [filteredTickets]);

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Ticket, TicketStatus } from '@/lib/mock-data';
-import { isCreatedToday } from '@/lib/date-filters';
 import { formatarNomeExibicao } from '@/lib/format-name';
 import { PrioritizedTicket } from '@/lib/priority-engine';
 import { Button } from '@/components/ui/button';
@@ -181,15 +180,12 @@ export function PainelPrincipal({
     return () => clearInterval(interval);
   }, [slides.length]);
 
-  const statusSummary = useMemo(() => {
-    const ticketsHoje = allTickets.filter(t => isCreatedToday(t.criadoEm));
-    return [
-      { name: 'Nova solicitação', value: ticketsHoje.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: HEADER_RESOLVIDO_FILA },
-      { name: 'Aguardando solicitante', value: ticketsHoje.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: STATUS_AGUARDANDO },
-      { name: 'Em atendimento', value: ticketsHoje.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: HEADER_ANDAMENTO },
-      { name: 'Concluídos', value: ticketsHoje.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: HEADER_ANDAMENTO },
-    ];
-  }, [allTickets]);
+  const statusSummary = useMemo(() => [
+    { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: HEADER_RESOLVIDO_FILA },
+    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: STATUS_AGUARDANDO },
+    { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: HEADER_ANDAMENTO },
+    { name: 'Concluídos', value: allTickets.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: HEADER_ANDAMENTO },
+  ], [allTickets]);
 
   const addSlide = () => {
     if (!newSlideTitle.trim() || !newSlideContent.trim()) return;
@@ -361,9 +357,6 @@ export function PainelPrincipal({
                     {nomeSolicitante(ticketAtual)}
                   </p>
                   <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-                  <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.75vw, 0.75rem)' }}>
-                    Equipe/Departamento
-                  </p>
                   <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
                     {textoDepartamentoOuTraco(ticketAtual)}
                   </p>
@@ -414,9 +407,6 @@ export function PainelPrincipal({
                   {nomeSolicitante(ultimoResolvido)}
                 </p>
                 <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-                <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.55rem, 0.75vw, 0.75rem)' }}>
-                  Equipe/Departamento
-                </p>
                 <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                   {textoDepartamentoOuTraco(ultimoResolvido)}
                 </p>
