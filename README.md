@@ -125,8 +125,8 @@ Campos principais usados pelo painel:
 | Coluna | Origem / uso |
 |--------|----------------|
 | `ticket_id` | ID do deal no Bitrix |
-| `solicitante` | Campo `UF_CRM_1749565388` |
-| `solicitante_foto` | Foto do perfil Bitrix |
+| `solicitante` | Campo **Nome do solicitante do Suporte** (`UF_CRM_1749565390`); departamento via usuário vinculado ou busca na estrutura da empresa |
+| `solicitante_foto` | Foto do perfil Bitrix (usuário vinculado ou encontrado pelo nome) |
 | `responsavel` | `ASSIGNED_BY_ID` |
 | `departamento` | Departamento do solicitante (`department.get`) |
 | `ferramenta` | Campo mapeado no webhook |
@@ -165,11 +165,15 @@ supabase functions deploy bitrix-webhook --no-verify-jwt
 | `SUPABASE_URL` | Sim | Injetado automaticamente no deploy |
 | `SUPABASE_SERVICE_ROLE_KEY` | Sim | Injetado automaticamente no deploy |
 | `BITRIX_PEDRO_LEAL_USER_ID` | Não | ID do responsável alvo (ex.: `1326`) |
-| `BITRIX_FILTRAR_PEDRO_LEAL` | Não | `true` (padrão) filtra só deals do responsável |
+| `BITRIX_FILTRAR_PEDRO_LEAL` | Não | `true` filtra só deals do responsável Pedro Leal (padrão: desligado) |
 | `BITRIX_RESPONSAVEL_NOME` | Não | Nome do responsável (padrão: Pedro Leal) |
 | `BITRIX_CATEGORY_ID` | Não | ID do funil CRM (padrão: `54`) |
 | `BITRIX_SUP_NASCIMENTO_DEPT_ID` | Não | Dept. superintendência Nascimento (padrão: `7`) |
 | `BITRIX_SUP_STUBPP_DEPT_ID` | Não | Dept. superintendência Stüpp (padrão: `3`) |
+| `BITRIX_PAINEL_MARKERS` | Não | Textos aceitos no campo Observação (padrão: `SUPORTE PRESENCIAL NO SALÃO`) |
+| `BITRIX_OBSERVACAO_FIELD` | Não | Código UF do campo Observação (auto-detecta se vazio) |
+| `BITRIX_SYNC_SECRET` | Não | Segredo para `?action=sync` (sincronização em lote) |
+| `BITRIX_NOME_SOLICITANTE_FIELD` | Não | Campo CRM do nome do solicitante (padrão: `UF_CRM_1749565390`) |
 
 ---
 
@@ -182,20 +186,26 @@ supabase functions deploy bitrix-webhook --no-verify-jwt
 3. Aponte a URL para a Edge Function do Supabase.
 4. Garanta que o webhook de **entrada** usado em `BITRIX_INCOMING_WEBHOOK` tenha escopo para:
    - `crm.deal.get`
-   - `user.get`
+   - `crm.deal.list`
+   - `crm.deal.userfield.list`
+   - `user.get` (inclui busca por `FILTER[NAME_SEARCH]` na estrutura da empresa)
    - `department.get`
 
 ### Mapeamentos Bitrix relevantes
 
 | Campo Bitrix | Uso |
 |--------------|-----|
-| `UF_CRM_1749565388` | Solicitante |
+| Campo **Observação** | Deve conter `SUPORTE PRESENCIAL NO SALÃO` para entrar no painel |
+| `UF_CRM_1749565390` | Nome do solicitante do Suporte (texto exibido no painel) |
+| `UF_CRM_1749565388` | Solicitante — usuário (vínculo para foto e departamento) |
 | `ASSIGNED_BY_ID` | Responsável |
-| `UF_DEPARTMENT` | Departamento do perfil do solicitante |
+| `UF_DEPARTMENT` | Departamento do perfil do solicitante (estrutura da empresa) |
 | Dept. ID `7` | Superintendência Nascimento |
 | Dept. ID `3` | Superintendência Stüpp |
 
 Estágios do funil são convertidos para status internos (`em_atendimento`, `nova_solicitacao`, `concluido`, etc.) pela Edge Function.
+
+Deals no funil de suporte entram no painel quando o campo **Observação** contém **SUPORTE PRESENCIAL NO SALÃO**. A sincronização em lote (`?action=sync`) varre a esteira a cada abertura do painel (com `VITE_BITRIX_SYNC_SECRET`) e a cada 3 minutos.
 
 ---
 

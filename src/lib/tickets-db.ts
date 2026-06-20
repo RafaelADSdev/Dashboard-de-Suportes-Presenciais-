@@ -58,6 +58,7 @@ export function rowToTicket(row: TicketRow): Ticket {
     resolvidoEm: row.resolvido_em ?? undefined,
     negociosAtivos: row.negocios_ativos,
     superintendencia: row.superintendencia,
+    estagioBitrix: row.estagio_bitrix ?? undefined,
   };
 }
 

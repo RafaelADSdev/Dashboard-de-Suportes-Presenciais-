@@ -49,6 +49,7 @@ export type Database = {
           criado_em: string
           departamento: string
           diretoria: string
+          estagio_bitrix: string | null
           ferramenta: string
           id: string
           interacoes: number
@@ -74,6 +75,7 @@ export type Database = {
           criado_em?: string
           departamento?: string
           diretoria?: string
+          estagio_bitrix?: string | null
           ferramenta: string
           id?: string
           interacoes?: number
@@ -99,6 +101,7 @@ export type Database = {
           criado_em?: string
           departamento?: string
           diretoria?: string
+          estagio_bitrix?: string | null
           ferramenta?: string
           id?: string
           interacoes?: number

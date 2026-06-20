@@ -28,6 +28,13 @@ const HEADER_INFO_STATUS = '#002248';
 /** Teal mais claro — legível sobre fundo escuro (#002248 some no card) */
 const STATUS_AGUARDANDO = '#5EC4D4';
 
+/** Abas de superintendência. "S/N" = cards que o sistema não conseguiu identificar. */
+const SUPERINTENDENCIA_TABS: { id: string; short: string; logo: string | null }[] = [
+  { id: 'Stüpp', short: 'S', logo: stuppLogo },
+  { id: 'Nascimento', short: 'N', logo: nascimentoLogo },
+  { id: 'Não identificado', short: 'S/N', logo: null },
+];
+
 type InfoSlide = {
   id: string;
   type: 'text' | 'image';
@@ -299,10 +306,10 @@ export function PainelPrincipal({
           </h1>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {['Stüpp', 'Nascimento'].map(s => {
-            const isActive = superintendencia === s;
+          {SUPERINTENDENCIA_TABS.map(tab => {
+            const isActive = superintendencia === tab.id;
             return (
-              <button key={s} onClick={() => onSuperintendenciaChange(s)}
+              <button key={tab.id} onClick={() => onSuperintendenciaChange(tab.id)}
                 className="rounded-2xl font-bold transition-all duration-300 flex items-center justify-center"
                 style={{
                   background: isActive ? `${DARK_CARD_LIGHTER}` : 'transparent',
@@ -310,12 +317,19 @@ export function PainelPrincipal({
                   padding: isActive ? '0.6vh 1.2vw' : '0.6vh 0.8vw',
                   opacity: isActive ? 1 : 0.35,
                 }}>
-                {isActive ? (
-                  <img src={s === 'Stüpp' ? stuppLogo : nascimentoLogo} alt={s}
+                {isActive && tab.logo ? (
+                  <img src={tab.logo} alt={tab.id}
                     style={{ height: 'clamp(32px, 5.5vh, 65px)' }} />
                 ) : (
-                  <span className="font-black" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(1.1rem, 2.2vw, 2rem)' }}>
-                    {s === 'Stüpp' ? 'S' : 'N'}
+                  <span className="font-black" style={{
+                    color: isActive ? DARK_TEXT : DARK_TEXT_MUTED,
+                    fontSize: tab.logo
+                      ? 'clamp(1.1rem, 2.2vw, 2rem)'
+                      : isActive
+                        ? 'clamp(1.5rem, 3.2vw, 2.8rem)'
+                        : 'clamp(1.1rem, 2.2vw, 2rem)',
+                  }}>
+                    {tab.short}
                   </span>
                 )}
               </button>
@@ -540,8 +554,8 @@ export function PainelPrincipal({
               ))}
             </div>
             {/* Rows */}
-            <div className="flex-1 flex flex-col">
-              {fila.slice(0, 5).map((ticket, idx) => (
+            <div className="flex-1 flex flex-col overflow-y-auto">
+              {fila.map((ticket, idx) => (
                 <div key={ticket.id} className="grid items-center transition-colors" style={{
                   gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
                   padding: 'clamp(5px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',

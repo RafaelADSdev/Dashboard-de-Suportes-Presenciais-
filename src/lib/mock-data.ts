@@ -32,4 +32,5 @@ export interface Ticket {
   resolvidoEm?: string;
   negociosAtivos: number;
   superintendencia: string;
+  estagioBitrix?: string;
 }

@@ -4,6 +4,8 @@ import { PainelPrincipal } from '@/components/PainelPrincipal';
 import { fetchTickets, subscribeTickets } from '@/lib/tickets-db';
 import type { Ticket } from '@/lib/mock-data';
 import { filterTicketsCreatedToday, scheduleMidnightReset } from '@/lib/date-filters';
+import { filterSuportePresencialNoSalao } from '@/lib/bitrix-filters';
+import { triggerBitrixSync } from '@/lib/bitrix-sync';
 import { Loader2 } from 'lucide-react';
 
 export default function Index() {
@@ -16,6 +18,7 @@ export default function Index() {
 
   const loadTickets = useCallback(async () => {
     try {
+      await triggerBitrixSync();
       const data = await fetchTickets();
       setTickets(data);
       setError(null);
@@ -29,9 +32,16 @@ export default function Index() {
 
   useEffect(() => {
     loadTickets();
-    return subscribeTickets(() => {
+    const syncInterval = window.setInterval(() => {
+      triggerBitrixSync().then(() => loadTickets());
+    }, 3 * 60 * 1000);
+    const unsubscribe = subscribeTickets(() => {
       loadTickets();
     });
+    return () => {
+      clearInterval(syncInterval);
+      unsubscribe();
+    };
   }, [loadTickets]);
 
   useEffect(() => {
@@ -42,14 +52,18 @@ export default function Index() {
   }, [loadTickets]);
 
   const ticketsHoje = useMemo(
-    () => filterTicketsCreatedToday(tickets),
+    () => filterSuportePresencialNoSalao(filterTicketsCreatedToday(tickets)),
     [tickets, diaPainel]
   );
 
-  const filteredTickets = useMemo(
-    () => ticketsHoje.filter(t => t.superintendencia === superintendencia),
-    [ticketsHoje, superintendencia]
-  );
+  const filteredTickets = useMemo(() => {
+    if (superintendencia === 'Não identificado') {
+      return ticketsHoje.filter(
+        t => t.superintendencia !== 'Stüpp' && t.superintendencia !== 'Nascimento'
+      );
+    }
+    return ticketsHoje.filter(t => t.superintendencia === superintendencia);
+  }, [ticketsHoje, superintendencia]);
 
   useEffect(() => {
     const emAtend = filteredTickets.filter(t => t.status === 'em_atendimento');
