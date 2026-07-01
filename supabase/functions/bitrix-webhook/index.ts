@@ -43,10 +43,17 @@ const FERRAMENTA_MAP: Record<string, string> = {
   "4952": "Outros",
 };
 
+/** Campo do card: Superintendência (origem do suporte presencial). */
+const SUPERINTENDENCIA_FIELD =
+  Deno.env.get("BITRIX_SUPERINTENDENCIA_FIELD") ?? "UF_CRM_1711980380";
+const SUPERINTENDENCIA_FIELD_LABELS = ["Superintendência", "Superintendencia"];
+
+/** Legado: enum antigo no card (mantido como fallback). */
 const SUPERINTENDENCIA_MAP: Record<string, string> = {
   "11357": "Nascimento",
   "11359": "Stüpp",
 };
+const SUPERINTENDENCIA_LEGACY_FIELD = "UF_CRM_1775566080848";
 
 /** IDs na estrutura da empresa (Bitrix department.get) */
 const SUPERINTENDENCIA_NASCIMENTO_DEPT_ID =
@@ -456,6 +463,41 @@ function superintendenciaFromDeptName(name: string): string | null {
   return null;
 }
 
+/** Texto do campo Superintendência no card → aba do painel. */
+function superintendenciaFromCardValue(text: string): string | null {
+  const n = normalizeDeptName(text);
+  if (n.includes("NASCIMENTO")) return "Nascimento";
+  if (n.includes("STUBP") || n.includes("STUPP") || n.includes("STUP")) return "Stüpp";
+  return null;
+}
+
+async function resolveSuperintendenciaFromDeal(
+  auth: BitrixAuth,
+  fields: Record<string, unknown>
+): Promise<string | null> {
+  const userFields = await loadDealUserFields(auth);
+  const field =
+    resolveUserFieldByLabel(userFields, SUPERINTENDENCIA_FIELD, SUPERINTENDENCIA_FIELD_LABELS) ??
+    userFields.find((item) => String(item.FIELD_NAME || "").trim() === SUPERINTENDENCIA_FIELD) ??
+    null;
+
+  const fieldName = field
+    ? String(field.FIELD_NAME || "").trim()
+    : SUPERINTENDENCIA_FIELD;
+  const enumMap = field ? buildEnumMap(field) : new Map<string, string>();
+  const text = extractFieldText(fields[fieldName], enumMap);
+  if (!text) return null;
+
+  const fromCard = superintendenciaFromCardValue(text);
+  if (fromCard) return fromCard;
+
+  console.log("[painel] superintendencia no card sem mapeamento conhecido", {
+    field: fieldName,
+    valor: text,
+  });
+  return null;
+}
+
 function extractDepartmentIds(value: unknown): string[] {
   const ids = Array.isArray(value)
     ? value
@@ -703,7 +745,7 @@ async function mapDealToTicket(
   const stageId = String(fields.STAGE_ID || "");
   const status = stageStatusMap[stageId] || "nova_solicitacao";
   const ferramentaValue = String(fields.UF_CRM_1749565443085 || "");
-  const supValue = String(fields.UF_CRM_1775566080848 || "");
+  const supValue = String(fields[SUPERINTENDENCIA_LEGACY_FIELD] || "");
 
   const responsavelId = extractUserId(fields[RESPONSAVEL_FIELD]);
 
@@ -713,14 +755,22 @@ async function mapDealToTicket(
     ? await resolveUser(auth, responsavelId, userCache, departmentCache)
     : { name: "Não informado", photo: null, departamento: null, superintendencia: null };
 
-  // Quando não conseguimos determinar a superintendência pelo colaborador
-  // (nome não encontrado, sem departamento ou árvore sem âncora), marcamos
-  // como "Não identificado" para aparecer na aba S/N do painel — em vez de
-  // cair silenciosamente em Stüpp.
+  const superintendenciaFromCard = await resolveSuperintendenciaFromDeal(auth, fields);
+
+  // Prioridade: campo Superintendência no card → legado no card → estrutura do colaborador.
   const superintendencia =
-    solicitanteInfo.superintendencia ||
+    superintendenciaFromCard ||
     SUPERINTENDENCIA_MAP[supValue] ||
+    solicitanteInfo.superintendencia ||
     "Não identificado";
+
+  console.log("[painel] superintendencia resolvida", {
+    deal_id: String(fields.ID || fields.id || ""),
+    campo_card: superintendenciaFromCard,
+    legado_enum: SUPERINTENDENCIA_MAP[supValue] ?? null,
+    pelo_colaborador: solicitanteInfo.superintendencia,
+    final: superintendencia,
+  });
 
   return {
     ticket_id: String(fields.ID || fields.id || ""),
