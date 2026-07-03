@@ -3,7 +3,7 @@
 Painel em tempo real para exibição em TV no salão — fila de atendimento presencial integrada ao **Bitrix24**, com dados sincronizados via **Supabase Realtime**.
 
 **Produção:** [dashsuportespresenciais.vercel.app](https://dashsuportespresenciais.vercel.app)  
-**Repositório:** [github.com/RafaelADSdev/Dashboard-de-Suportes-Presenciais-](https://github.com/RafaelADSdev/Dashboard-de-Suportes-Presenciais-)
+**Repositório:** [github.com/Hub-On-Tecnologia/fila-suporte-salao](https://github.com/Hub-On-Tecnologia/fila-suporte-salao)
 
 ---
 

@@ -18,6 +18,7 @@ export type Database = {
           created_at: string
           id: string
           sort_order: number
+          superintendencia: string
           title: string
           type: string
           updated_at: string
@@ -27,6 +28,7 @@ export type Database = {
           created_at?: string
           id?: string
           sort_order?: number
+          superintendencia?: string
           title: string
           type?: string
           updated_at?: string
@@ -36,6 +38,7 @@ export type Database = {
           created_at?: string
           id?: string
           sort_order?: number
+          superintendencia?: string
           title?: string
           type?: string
           updated_at?: string

@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import type { TicketRow } from '@/integrations/supabase/types';
 import type { NivelImpacto, Ticket, TicketStatus, TicketTipo } from '@/lib/mock-data';
 
@@ -63,6 +63,12 @@ export function rowToTicket(row: TicketRow): Ticket {
 }
 
 export async function fetchTickets(): Promise<Ticket[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error(
+      'Supabase não configurado. Copie .env.example para .env e preencha VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.'
+    );
+  }
+
   const { data, error } = await supabase
     .from('tickets')
     .select('*')
@@ -77,6 +83,10 @@ export async function updateTicketStatus(
   status: TicketStatus,
   resolvidoEm?: string | null
 ): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase não configurado.');
+  }
+
   const payload: { status: TicketStatus; resolvido_em?: string | null } = { status };
   if (resolvidoEm !== undefined) {
     payload.resolvido_em = resolvidoEm;
@@ -91,6 +101,10 @@ export async function updateTicketStatus(
 }
 
 export function subscribeTickets(onChange: () => void) {
+  if (!isSupabaseConfigured || !supabase) {
+    return () => {};
+  }
+
   const channel = supabase
     .channel('tickets-realtime')
     .on(

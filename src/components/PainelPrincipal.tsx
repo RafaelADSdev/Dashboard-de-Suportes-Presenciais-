@@ -1,9 +1,16 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Ticket, TicketStatus } from '@/lib/mock-data';
 import { formatarNomeExibicao } from '@/lib/format-name';
 import { PrioritizedTicket } from '@/lib/priority-engine';
+import {
+  createInfoSlide,
+  deleteInfoSlide,
+  fetchInfoSlides,
+  subscribeInfoSlides,
+  type InfoSlide,
+} from '@/lib/info-slides-db';
 import { Button } from '@/components/ui/button';
-import { User, Headset, ChevronLeft, ChevronRight, Settings, Plus, Trash2, Image, Type, AlertTriangle, RefreshCw, CheckCircle2, FileText, Clock, Zap } from 'lucide-react';
+import { User, Headset, ChevronLeft, ChevronRight, Settings, Plus, Trash2, Image, Type, CheckCircle2, Clock, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -13,42 +20,37 @@ import backgroundVideo from '@/assets/hubon-background.mp4';
 import stuppLogo from '@/assets/sup_stupp_branco.png';
 import nascimentoLogo from '@/assets/diret_nascimento_branco.png';
 
-// Dark mode palette
-const DARK_BG = '#0c0c1d';
-const DARK_CARD = '#161630';
-const DARK_CARD_LIGHTER = '#1e1e42';
-const DARK_BORDER = '#2a2a50';
-const DARK_TEXT = '#e8e8f0';
-const DARK_TEXT_MUTED = '#8888a8';
-const COLOR_BLUE = '#38b6ff';
-const COLOR_GREEN = '#c1ff72';
-const HEADER_ANDAMENTO = '#1FA841';
-const HEADER_RESOLVIDO_FILA = '#165962';
-const HEADER_INFO_STATUS = '#002248';
-/** Teal mais claro — legível sobre fundo escuro (#002248 some no card) */
-const STATUS_AGUARDANDO = '#5EC4D4';
+// Paleta alinhada a tokens em index.css (--dash-*)
+const C = {
+  bg: 'var(--dash-bg)',
+  surface: 'var(--dash-surface)',
+  cardRaised: 'var(--dash-surface-raised)',
+  border: 'var(--dash-border)',
+  borderMuted: 'rgba(72, 72, 120, 0.5)',
+  text: 'var(--dash-text)',
+  textMuted: 'var(--dash-text-muted)',
+  blue: 'var(--dash-accent-blue)',
+  blueHex: '#38b6ff',
+  blueDark: '#1a9bef',
+  blueSubtle: 'rgba(56, 182, 255, 0.06)',
+  blueFaint: 'rgba(56, 182, 255, 0.08)',
+  blueSoft: 'rgba(56, 182, 255, 0.12)',
+  blueGlow: 'rgba(56, 182, 255, 0.25)',
+  rowStripe: 'rgba(56, 182, 255, 0.04)',
+  rowFirst: 'rgba(56, 182, 255, 0.10)',
+  green: 'var(--dash-accent-green)',
+  greenBorder: 'rgba(193, 255, 114, 0.25)',
+  headerAndamento: 'var(--dash-header-active)',
+  headerFila: 'var(--dash-header-queue)',
+  headerInfo: 'var(--dash-header-info)',
+  statusAguardando: 'var(--dash-status-waiting)',
+} as const;
 
 /** Abas de superintendência. "S/N" = cards que o sistema não conseguiu identificar. */
 const SUPERINTENDENCIA_TABS: { id: string; short: string; logo: string | null }[] = [
   { id: 'Stüpp', short: 'S', logo: stuppLogo },
   { id: 'Nascimento', short: 'N', logo: nascimentoLogo },
   { id: 'Não identificado', short: 'S/N', logo: null },
-];
-
-type InfoSlide = {
-  id: string;
-  type: 'text' | 'image';
-  title: string;
-  content: string;
-};
-
-const initialSlides: InfoSlide[] = [
-  {
-    id: 'local-1',
-    type: 'text',
-    title: 'Bem-vindo',
-    content: 'Use o painel para acompanhar a fila de suporte presencial em tempo real.',
-  },
 ];
 
 function nomeSolicitante(ticket: Ticket): string {
@@ -79,7 +81,7 @@ function SolicitanteAvatar({
   ticket,
   idx = 0,
   size,
-  accent = COLOR_BLUE,
+  accent = C.blue,
 }: {
   ticket: Pick<Ticket, 'solicitante' | 'solicitanteFoto'>;
   idx?: number;
@@ -132,7 +134,10 @@ export function PainelPrincipal({
   const [newSlideType, setNewSlideType] = useState<'text' | 'image'>('text');
   const [newSlideTitle, setNewSlideTitle] = useState('');
   const [newSlideContent, setNewSlideContent] = useState('');
-  const [slides, setSlides] = useState<InfoSlide[]>(initialSlides);
+  const [slides, setSlides] = useState<InfoSlide[]>([]);
+  const [slidesLoading, setSlidesLoading] = useState(true);
+  const [slidesSaving, setSlidesSaving] = useState(false);
+  const [slidesError, setSlidesError] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [celebrationTicket, setCelebrationTicket] = useState<Ticket | null>(null);
   const prevAtendimentoRef = useRef<string | null>(null);
@@ -150,7 +155,7 @@ export function PainelPrincipal({
     setCelebrationTicket(ticket);
     setShowResolved(true);
     if (celebrationTimeoutRef.current) clearTimeout(celebrationTimeoutRef.current);
-    celebrationTimeoutRef.current = window.setTimeout(() => setShowResolved(false), 4000);
+    celebrationTimeoutRef.current = window.setTimeout(() => setShowResolved(false), 6000);
   };
 
   useEffect(() => {
@@ -181,6 +186,28 @@ export function PainelPrincipal({
     emAtendimento[0] ??
     null;
 
+  const loadSlides = useCallback(async () => {
+    try {
+      setSlidesError(null);
+      const data = await fetchInfoSlides(superintendencia);
+      setSlides(data);
+      setCurrentSlide(prev => (data.length === 0 ? 0 : Math.min(prev, data.length - 1)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao carregar informações';
+      setSlidesError(message);
+    } finally {
+      setSlidesLoading(false);
+    }
+  }, [superintendencia]);
+
+  useEffect(() => {
+    setSlidesLoading(true);
+    setCurrentSlide(0);
+    loadSlides();
+    const unsubscribe = subscribeInfoSlides(superintendencia, loadSlides);
+    return unsubscribe;
+  }, [superintendencia, loadSlides]);
+
   useEffect(() => {
     if (slides.length <= 1) return;
     const interval = setInterval(() => setCurrentSlide(prev => (prev + 1) % slides.length), 4000);
@@ -188,29 +215,50 @@ export function PainelPrincipal({
   }, [slides.length]);
 
   const statusSummary = useMemo(() => [
-    { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: HEADER_RESOLVIDO_FILA },
-    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: STATUS_AGUARDANDO },
-    { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: HEADER_ANDAMENTO },
-    { name: 'Concluídos', value: allTickets.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: HEADER_ANDAMENTO },
+    { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: C.headerFila },
+    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: C.statusAguardando },
+    { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: C.headerAndamento },
+    { name: 'Concluídos', value: allTickets.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: C.headerAndamento },
   ], [allTickets]);
 
-  const addSlide = () => {
-    if (!newSlideTitle.trim() || !newSlideContent.trim()) return;
-    setSlides(prev => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        type: newSlideType,
-        title: newSlideTitle.trim(),
-        content: newSlideContent.trim(),
-      },
-    ]);
-    setNewSlideTitle(''); setNewSlideContent('');
+  const addSlide = async () => {
+    if (!newSlideTitle.trim() || !newSlideContent.trim() || slidesSaving) return;
+    setSlidesSaving(true);
+    setSlidesError(null);
+    try {
+      await createInfoSlide(
+        superintendencia,
+        {
+          type: newSlideType,
+          title: newSlideTitle.trim(),
+          content: newSlideContent.trim(),
+        },
+        slides.length
+      );
+      setNewSlideTitle('');
+      setNewSlideContent('');
+      await loadSlides();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao salvar informação';
+      setSlidesError(message);
+    } finally {
+      setSlidesSaving(false);
+    }
   };
 
-  const removeSlide = (id: string) => {
-    setSlides(prev => prev.filter(slide => slide.id !== id));
-    if (currentSlide >= slides.length - 1) setCurrentSlide(0);
+  const removeSlide = async (id: string) => {
+    if (slidesSaving) return;
+    setSlidesSaving(true);
+    setSlidesError(null);
+    try {
+      await deleteInfoSlide(id);
+      await loadSlides();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao remover informação';
+      setSlidesError(message);
+    } finally {
+      setSlidesSaving(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,23 +274,7 @@ export function PainelPrincipal({
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const getStatusIcon = (icon: string, size: number = 22) => {
-    switch (icon) {
-      case 'new': return <FileText size={size} />;
-      case 'alert': return <AlertTriangle size={size} />;
-      case 'refresh': return <RefreshCw size={size} />;
-      case 'check': return <CheckCircle2 size={size} />;
-      default: return null;
-    }
-  };
-
   const hasActiveTicket = !!ticketAtual;
-
-  const cardStyle = {
-    background: DARK_CARD,
-    border: `1px solid ${DARK_BORDER}`,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-  };
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
@@ -250,7 +282,7 @@ export function PainelPrincipal({
       <div
         className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
         aria-hidden
-        style={{ background: DARK_BG }}
+        style={{ background: C.bg }}
       >
         <video
           autoPlay
@@ -269,34 +301,56 @@ export function PainelPrincipal({
       }}>
       {/* Resolved ticket overlay */}
       {showResolved && celebrationTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ backgroundColor: 'rgba(8,8,20,0.9)', backdropFilter: 'blur(16px)' }}>
-          <div className="rounded-3xl p-10 shadow-2xl text-center animate-fade-in" style={{
-            background: DARK_CARD,
-            border: `1px solid ${COLOR_GREEN}40`,
-            maxWidth: '440px',
-          }}>
-            <div className="mx-auto mb-5 flex justify-center">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center celebration-overlay celebration-overlay-enter px-4"
+          role="alertdialog"
+          aria-live="assertive"
+          aria-label="Suporte concluído"
+        >
+          <div className="celebration-glow" aria-hidden />
+          <div className="celebration-card panel-card rounded-3xl text-center">
+            <div className="celebration-badge">
+              <CheckCircle2 size={28} strokeWidth={2.5} aria-hidden />
+              Suporte concluído!
+            </div>
+            <div className="celebration-avatar-wrap mx-auto mb-6 flex justify-center">
               <SolicitanteAvatar
                 ticket={celebrationTicket}
-                size="clamp(96px, 10vw, 120px)"
-                accent={COLOR_GREEN}
+                size="clamp(120px, 16vw, 180px)"
+                accent={C.green}
               />
             </div>
-            <h2 className="text-3xl font-black mb-2" style={{ color: COLOR_GREEN }}>Suporte concluído!</h2>
-            <p className="text-xl font-semibold" style={{ color: DARK_TEXT }}>{nomeSolicitante(celebrationTicket)}</p>
-            <div className="mx-auto my-2 w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-            <p className="text-base" style={{ color: DARK_TEXT_MUTED }}>
-              {textoDepartamento(celebrationTicket) ?? '-'}
-            </p>
-            <p className="text-base mt-1" style={{ color: COLOR_BLUE }}>{detalheFerramenta(celebrationTicket)}</p>
+            <p className="celebration-name mb-4">{nomeSolicitante(celebrationTicket)}</p>
+            <div className="panel-divider celebration-meta my-4" />
+            <div className="celebration-meta space-y-2">
+              <p
+                className="font-semibold"
+                style={{ color: C.textMuted, fontSize: 'clamp(1rem, 1.8vw, 1.35rem)' }}
+              >
+                {textoDepartamento(celebrationTicket) ?? '-'}
+              </p>
+              <p
+                className="font-bold"
+                style={{ color: C.blue, fontSize: 'clamp(1rem, 1.6vw, 1.25rem)' }}
+              >
+                {detalheFerramenta(celebrationTicket)}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0" style={{ marginBottom: 'clamp(10px, 1.5vh, 18px)', minHeight: 'clamp(60px, 10vh, 100px)' }}>
+      <div
+        className="flex items-center justify-between shrink-0 border-b pb-3"
+        style={{
+          marginBottom: 'clamp(10px, 1.5vh, 18px)',
+          minHeight: 'clamp(60px, 10vh, 100px)',
+          borderColor: C.borderMuted,
+        }}
+      >
         <div className="flex items-center gap-5 flex-1 justify-center">
-          <img src={hubOnLogo} alt="Hub On" style={{ height: 'clamp(44px, 7.5vh, 85px)', filter: `drop-shadow(0 2px 12px ${COLOR_BLUE}40)` }} />
+          <img src={hubOnLogo} alt="Hub On" style={{ height: 'clamp(44px, 7.5vh, 85px)', filter: `drop-shadow(0 2px 12px ${C.blueGlow})` }} />
           <h1 className="font-black text-center text-white" style={{
             fontSize: 'clamp(1.8rem, 5vw, 4.5rem)',
             lineHeight: 1,
@@ -305,29 +359,29 @@ export function PainelPrincipal({
             Fila de Suportes no Salão
           </h1>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="tab-segment shrink-0">
           {SUPERINTENDENCIA_TABS.map(tab => {
             const isActive = superintendencia === tab.id;
             return (
-              <button key={tab.id} onClick={() => onSuperintendenciaChange(tab.id)}
-                className="rounded-2xl font-bold transition-all duration-300 flex items-center justify-center"
-                style={{
-                  background: isActive ? `${DARK_CARD_LIGHTER}` : 'transparent',
-                  border: isActive ? `1px solid ${DARK_BORDER}` : '1px solid transparent',
-                  padding: isActive ? '0.6vh 1.2vw' : '0.6vh 0.8vw',
-                  opacity: isActive ? 1 : 0.35,
-                }}>
+              <button
+                key={tab.id}
+                type="button"
+                data-active={isActive}
+                aria-pressed={isActive}
+                aria-label={`Superintendência ${tab.id}`}
+                onClick={() => onSuperintendenciaChange(tab.id)}
+                className="tab-segment-btn flex items-center justify-center"
+              >
                 {isActive && tab.logo ? (
-                  <img src={tab.logo} alt={tab.id}
-                    style={{ height: 'clamp(32px, 5.5vh, 65px)' }} />
+                  <img src={tab.logo} alt={tab.id} style={{ height: 'clamp(28px, 4.5vh, 52px)' }} />
                 ) : (
                   <span className="font-black" style={{
-                    color: isActive ? DARK_TEXT : DARK_TEXT_MUTED,
+                    color: isActive ? C.text : C.textMuted,
                     fontSize: tab.logo
-                      ? 'clamp(1.1rem, 2.2vw, 2rem)'
+                      ? 'clamp(1rem, 1.8vw, 1.6rem)'
                       : isActive
-                        ? 'clamp(1.5rem, 3.2vw, 2.8rem)'
-                        : 'clamp(1.1rem, 2.2vw, 2rem)',
+                        ? 'clamp(1.3rem, 2.6vw, 2.2rem)'
+                        : 'clamp(1rem, 1.8vw, 1.6rem)',
                   }}>
                     {tab.short}
                   </span>
@@ -346,106 +400,103 @@ export function PainelPrincipal({
       }}>
 
         {/* ── Suporte em andamento ── */}
-        <div className="rounded-2xl overflow-hidden flex flex-col" style={cardStyle}>
-          <div className="shrink-0 flex items-center justify-center" style={{
-            background: HEADER_ANDAMENTO,
-            padding: 'clamp(6px, 0.8vh, 12px) 16px',
+        <div className="rounded-2xl overflow-hidden flex flex-col panel-card">
+          <div className="shrink-0 flex items-center justify-center panel-header" style={{
+            background: C.headerAndamento,
           }}>
             <div className="flex items-center gap-2">
-              <Zap size={16} className="text-white" />
-              <h2 className="font-bold tracking-wide text-white" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
+              <Zap size={16} className="text-white" aria-hidden />
+              <h2 className="panel-title">
                 Suporte em andamento
               </h2>
             </div>
           </div>
-          <div className="flex-1 overflow-hidden flex flex-col items-center justify-center" style={{ padding: 'clamp(16px, 1.5vw, 28px)' }}>
+          <div className="flex-1 overflow-hidden flex flex-col items-center justify-center panel-body">
             {ticketAtual ? (
               <div className="h-full w-full flex flex-col items-center justify-center text-center gap-4 animate-fade-in">
                 <SolicitanteAvatar
                   ticket={ticketAtual}
                   size="clamp(72px, 7vw, 110px)"
-                  accent={COLOR_GREEN}
+                  accent={C.green}
                 />
                 <div className="space-y-2 max-w-full">
-                  <p className="font-black leading-tight" style={{ color: DARK_TEXT, fontSize: 'clamp(1rem, 1.6vw, 1.6rem)' }}>
+                  <p className="font-black leading-tight" style={{ color: C.text, fontSize: 'clamp(1rem, 1.6vw, 1.6rem)' }}>
                     {nomeSolicitante(ticketAtual)}
                   </p>
-                  <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-                  <p style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
+                  <div className="panel-divider" />
+                  <p style={{ color: C.textMuted, fontSize: 'clamp(0.6rem, 0.85vw, 0.85rem)' }}>
                     {textoDepartamentoOuTraco(ticketAtual)}
                   </p>
                   <div className="flex items-center justify-center gap-2">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: COLOR_BLUE }} />
-                    <span className="font-semibold" style={{ color: COLOR_BLUE, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>Em atendimento</span>
+                    <span className="inline-block w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: C.blue }} />
+                    <span className="font-semibold" style={{ color: C.blue, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>Em atendimento</span>
                   </div>
-                  <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
+                  <p className="font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                     {ticketAtual.ferramenta} · {ticketAtual.id}
                   </p>
                 </div>
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center gap-3">
-                <div className="rounded-full p-5" style={{ background: `${COLOR_BLUE}08` }}>
-                  <Headset style={{ color: DARK_TEXT_MUTED, width: 'clamp(28px, 3vw, 44px)', height: 'clamp(28px, 3vw, 44px)' }} />
+                <div className="rounded-full p-5" style={{ background: C.blueFaint }}>
+                  <Headset style={{ color: C.textMuted, width: 'clamp(28px, 3vw, 44px)', height: 'clamp(28px, 3vw, 44px)' }} />
                 </div>
-                <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Nenhum atendimento</p>
+                <p className="font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Nenhum atendimento</p>
               </div>
             )}
           </div>
         </div>
 
         {/* ── Último suporte resolvido ── */}
-        <div className="rounded-2xl overflow-hidden flex flex-col" style={cardStyle}>
-          <div className="shrink-0 flex items-center justify-center" style={{
-            background: HEADER_RESOLVIDO_FILA,
-            padding: 'clamp(6px, 0.8vh, 12px) 16px',
+        <div className="rounded-2xl overflow-hidden flex flex-col panel-card">
+          <div className="shrink-0 flex items-center justify-center panel-header" style={{
+            background: C.headerFila,
           }}>
             <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-white" />
-              <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
+              <CheckCircle2 size={16} className="text-white" aria-hidden />
+              <h2 className="panel-title">
                 Último suporte resolvido
               </h2>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center" style={{ padding: 'clamp(16px, 1.5vw, 28px)' }}>
+          <div className="flex-1 flex items-center justify-center panel-body">
             {ultimoResolvido ? (
               <div className="text-center space-y-2 animate-fade-in">
                 <div className="mx-auto flex justify-center">
                   <SolicitanteAvatar
                     ticket={ultimoResolvido}
                     size="clamp(80px, 8vw, 120px)"
-                    accent={COLOR_GREEN}
+                    accent={C.green}
                   />
                 </div>
-                <p className="font-black leading-tight" style={{ color: DARK_TEXT, fontSize: 'clamp(1rem, 1.5vw, 1.5rem)' }}>
+                <p className="font-black leading-tight" style={{ color: C.text, fontSize: 'clamp(1rem, 1.5vw, 1.5rem)' }}>
                   {nomeSolicitante(ultimoResolvido)}
                 </p>
-                <div className="mx-auto w-12 border-t" style={{ borderColor: `${DARK_BORDER}80` }} />
-                <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
+                <div className="panel-divider" />
+                <p className="font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                   {textoDepartamentoOuTraco(ultimoResolvido)}
                 </p>
-                <p className="font-semibold" style={{ color: COLOR_BLUE, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
+                <p className="font-semibold" style={{ color: C.blue, fontSize: 'clamp(0.75rem, 1.05vw, 1.05rem)' }}>
                   {detalheFerramenta(ultimoResolvido)}
                 </p>
               </div>
             ) : (
               <div className="text-center space-y-3">
-                <div className="mx-auto rounded-full p-5" style={{ background: `${COLOR_BLUE}08` }}>
-                  <CheckCircle2 style={{ color: DARK_TEXT_MUTED, width: 'clamp(30px, 2.8vw, 46px)', height: 'clamp(30px, 2.8vw, 46px)' }} />
+                <div className="mx-auto rounded-full p-5" style={{ background: C.blueFaint }}>
+                  <CheckCircle2 style={{ color: C.textMuted, width: 'clamp(30px, 2.8vw, 46px)', height: 'clamp(30px, 2.8vw, 46px)' }} />
                 </div>
-                <p className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Nenhum suporte resolvido</p>
+                <p className="font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Nenhum suporte resolvido</p>
               </div>
             )}
           </div>
         </div>
 
         {/* ── Informações ── */}
-        <div className="rounded-2xl overflow-hidden flex flex-col" style={cardStyle}>
-          <div className="shrink-0 flex items-center justify-center relative" style={{
-            background: HEADER_INFO_STATUS,
-            padding: 'clamp(6px, 0.8vh, 12px) 16px',
+        <div className="rounded-2xl overflow-hidden flex flex-col panel-card">
+          <div className="shrink-0 flex items-center justify-center relative panel-header" style={{
+            background: C.headerInfo,
           }}>
-            <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
+            <h2 className="panel-title">
               Informações
             </h2>
             <Dialog open={adminOpen} onOpenChange={setAdminOpen}>
@@ -456,25 +507,34 @@ export function PainelPrincipal({
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto bg-white">
                 <DialogHeader>
-                  <DialogTitle className="text-gray-800">Gerenciar informações</DialogTitle>
+                  <DialogTitle className="text-gray-800">
+                    Gerenciar informações — {superintendencia}
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
+                  {slidesError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                      {slidesError}
+                    </p>
+                  )}
                   <div className="space-y-3 border border-gray-200 rounded-lg p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Adicionar novo</p>
                     <div className="flex gap-2">
-                      <Button size="sm" variant={newSlideType === 'text' ? 'default' : 'outline'} className="h-7 text-xs gap-1" onClick={() => setNewSlideType('text')}><Type className="h-3 w-3" /> Texto</Button>
-                      <Button size="sm" variant={newSlideType === 'image' ? 'default' : 'outline'} className="h-7 text-xs gap-1" onClick={() => setNewSlideType('image')}><Image className="h-3 w-3" /> Imagem</Button>
+                      <Button size="sm" variant={newSlideType === 'text' ? 'default' : 'outline'} className="h-7 text-xs gap-1" onClick={() => setNewSlideType('text')} disabled={slidesSaving}><Type className="h-3 w-3" /> Texto</Button>
+                      <Button size="sm" variant={newSlideType === 'image' ? 'default' : 'outline'} className="h-7 text-xs gap-1" onClick={() => setNewSlideType('image')} disabled={slidesSaving}><Image className="h-3 w-3" /> Imagem</Button>
                     </div>
-                    <Input placeholder="Título" value={newSlideTitle} onChange={e => setNewSlideTitle(e.target.value)} className="h-8 text-xs text-gray-800 bg-white border-gray-300 placeholder:text-gray-400" />
+                    <Input placeholder="Título" value={newSlideTitle} onChange={e => setNewSlideTitle(e.target.value)} disabled={slidesSaving} className="h-8 text-xs text-gray-800 bg-white border-gray-300 placeholder:text-gray-400" />
                     {newSlideType === 'text' ? (
-                      <Textarea placeholder="Conteúdo..." value={newSlideContent} onChange={e => setNewSlideContent(e.target.value)} className="text-xs min-h-[60px] text-gray-800 bg-white border-gray-300 placeholder:text-gray-400" />
+                      <Textarea placeholder="Conteúdo..." value={newSlideContent} onChange={e => setNewSlideContent(e.target.value)} disabled={slidesSaving} className="text-xs min-h-[60px] text-gray-800 bg-white border-gray-300 placeholder:text-gray-400" />
                     ) : (
                       <div className="space-y-2">
-                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="block w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700" />
+                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} disabled={slidesSaving} className="block w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700" />
                         {newSlideContent && <img src={newSlideContent} alt="Preview" className="w-full rounded-lg max-h-32 object-contain border border-gray-200" />}
                       </div>
                     )}
-                    <Button size="sm" className="w-full h-7 text-xs gap-1" onClick={addSlide}><Plus className="h-3 w-3" /> Adicionar</Button>
+                    <Button size="sm" className="w-full h-7 text-xs gap-1" onClick={addSlide} disabled={slidesSaving}>
+                      <Plus className="h-3 w-3" /> {slidesSaving ? 'Salvando…' : 'Adicionar'}
+                    </Button>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Slides ({slides.length})</p>
@@ -485,7 +545,7 @@ export function PainelPrincipal({
                           <p className="text-xs font-medium text-gray-800 truncate">{slide.title}</p>
                           <p className="text-[10px] text-gray-500 truncate">{slide.type === 'text' ? slide.content : '🖼️ Imagem'}</p>
                         </div>
-                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700" onClick={() => removeSlide(slide.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700" onClick={() => removeSlide(slide.id)} disabled={slidesSaving}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     ))}
                   </div>
@@ -494,17 +554,25 @@ export function PainelPrincipal({
             </Dialog>
           </div>
           <div className="flex-1 relative overflow-hidden">
-            {slides.length > 0 ? (
+            {slidesLoading ? (
+              <div className="flex items-center justify-center h-full" style={{ color: C.textMuted, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>
+                Carregando…
+              </div>
+            ) : slidesError && slides.length === 0 ? (
+              <div className="flex items-center justify-center h-full px-4 text-center" style={{ color: C.textMuted, fontSize: 'clamp(0.65rem, 0.85vw, 0.85rem)' }}>
+                {slidesError}
+              </div>
+            ) : slides.length > 0 ? (
               <>
                 <div className="absolute inset-0 flex flex-col justify-center items-center" style={{ padding: 'clamp(16px, 1.5vw, 28px)' }}>
                   {slides[currentSlide]?.type === 'text' ? (
                     <div className="space-y-3 animate-fade-in text-center w-full">
-                      <h3 className="font-bold" style={{ color: DARK_TEXT, fontSize: 'clamp(0.95rem, 1.3vw, 1.3rem)' }}>{slides[currentSlide].title}</h3>
-                      <p className="leading-relaxed whitespace-pre-line" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.75rem, 1vw, 1rem)' }}>{slides[currentSlide].content}</p>
+                      <h3 className="font-bold" style={{ color: C.text, fontSize: 'clamp(0.95rem, 1.3vw, 1.3rem)' }}>{slides[currentSlide].title}</h3>
+                      <p className="leading-relaxed whitespace-pre-line" style={{ color: C.textMuted, fontSize: 'clamp(0.75rem, 1vw, 1rem)' }}>{slides[currentSlide].content}</p>
                     </div>
                   ) : (
                     <div className="space-y-3 animate-fade-in text-center w-full">
-                      <h3 className="font-bold" style={{ color: DARK_TEXT, fontSize: 'clamp(0.95rem, 1.3vw, 1.3rem)' }}>{slides[currentSlide].title}</h3>
+                      <h3 className="font-bold" style={{ color: C.text, fontSize: 'clamp(0.95rem, 1.3vw, 1.3rem)' }}>{slides[currentSlide].title}</h3>
                       <img src={slides[currentSlide].content} alt={slides[currentSlide].title} className="w-full rounded-lg object-contain" style={{ maxHeight: '70%' }} />
                     </div>
                   )}
@@ -514,58 +582,60 @@ export function PainelPrincipal({
                     <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-2">
                       {slides.map((_, i) => (
                         <button key={i} onClick={() => setCurrentSlide(i)} className="rounded-full transition-all duration-300"
-                          style={{ height: 6, width: i === currentSlide ? 20 : 6, backgroundColor: i === currentSlide ? HEADER_RESOLVIDO_FILA : DARK_BORDER }} />
+                          style={{ height: 6, width: i === currentSlide ? 20 : 6, backgroundColor: i === currentSlide ? C.headerFila : C.border }} />
                       ))}
                     </div>
-                    <button onClick={() => setCurrentSlide(prev => (prev - 1 + slides.length) % slides.length)} className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center transition-colors" style={{ background: DARK_CARD_LIGHTER, color: DARK_TEXT_MUTED }}><ChevronLeft className="h-4 w-4" /></button>
-                    <button onClick={() => setCurrentSlide(prev => (prev + 1) % slides.length)} className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center transition-colors" style={{ background: DARK_CARD_LIGHTER, color: DARK_TEXT_MUTED }}><ChevronRight className="h-4 w-4" /></button>
+                    <button onClick={() => setCurrentSlide(prev => (prev - 1 + slides.length) % slides.length)} className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center transition-colors" style={{ background: C.cardRaised, color: C.textMuted }}><ChevronLeft className="h-4 w-4" /></button>
+                    <button onClick={() => setCurrentSlide(prev => (prev + 1) % slides.length)} className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center transition-colors" style={{ background: C.cardRaised, color: C.textMuted }}><ChevronRight className="h-4 w-4" /></button>
                   </>
                 )}
               </>
             ) : (
-              <div className="flex items-center justify-center h-full" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Clique em ⚙️ para adicionar</div>
+              <div className="flex items-center justify-center h-full" style={{ color: C.textMuted, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>Clique em ⚙️ para adicionar</div>
             )}
           </div>
         </div>
 
         {/* ── Próximos suportes ── */}
-        <div className="col-span-2 rounded-2xl overflow-hidden flex flex-col" style={cardStyle}>
-          <div className="shrink-0 flex items-center justify-center" style={{
-            background: HEADER_RESOLVIDO_FILA,
-            padding: 'clamp(6px, 0.8vh, 12px) 16px',
+        <div className="col-span-2 rounded-2xl overflow-hidden flex flex-col panel-card">
+          <div className="shrink-0 flex items-center justify-center panel-header" style={{
+            background: C.headerFila,
           }}>
             <div className="flex items-center gap-2">
-              <Clock size={16} className="text-white" />
-              <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
+              <Clock size={16} className="text-white" aria-hidden />
+              <h2 className="panel-title">
                 Próximos suportes
               </h2>
             </div>
           </div>
           <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="grid shrink-0" style={{
               gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
               padding: 'clamp(6px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
-              borderBottom: `1px solid ${DARK_BORDER}`,
-              background: `${COLOR_BLUE}06`,
+              borderBottom: `1px solid ${C.border}`,
+              background: C.blueSubtle,
             }}>
               {['Pos.', 'Solicitante', 'Equipe/Departamento', 'Data/Hora', 'Ferramenta'].map(h => (
-                <p key={h} className="uppercase tracking-wider font-bold" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.5rem, 0.7vw, 0.7rem)' }}>{h}</p>
+                <p key={h} className="uppercase tracking-wider font-bold" style={{ color: C.textMuted, fontSize: 'clamp(0.5rem, 0.7vw, 0.7rem)' }}>{h}</p>
               ))}
             </div>
             {/* Rows */}
             <div className="flex-1 flex flex-col overflow-y-auto">
               {fila.map((ticket, idx) => (
-                <div key={ticket.id} className="grid items-center transition-colors" style={{
-                  gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
-                  padding: 'clamp(5px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
-                  borderBottom: `1px solid ${DARK_BORDER}40`,
-                  background: idx % 2 === 0 ? 'transparent' : `${COLOR_BLUE}04`,
-                }}>
+                <div
+                  key={ticket.id}
+                  className={`grid items-center queue-row ${idx === 0 ? 'queue-row-first' : ''}`}
+                  style={{
+                    gridTemplateColumns: '0.35fr 1.2fr 1fr 0.75fr 0.85fr',
+                    padding: 'clamp(5px, 0.7vh, 10px) clamp(12px, 1.2vw, 20px)',
+                    borderBottom: `1px solid ${C.borderMuted}`,
+                    background: idx % 2 === 1 && idx !== 0 ? C.rowStripe : undefined,
+                  }}
+                >
                   <div className="flex items-center">
                     <span className="font-black rounded-lg flex items-center justify-center" style={{
-                      color: idx === 0 ? DARK_BG : DARK_TEXT,
-                      background: idx === 0 ? `linear-gradient(135deg, ${COLOR_BLUE}, #1a9bef)` : `${COLOR_BLUE}12`,
+                      color: idx === 0 ? '#0c0c1d' : C.text,
+                      background: idx === 0 ? `linear-gradient(135deg, ${C.blueHex}, ${C.blueDark})` : C.blueSoft,
                       width: 'clamp(26px, 2.2vw, 36px)',
                       height: 'clamp(26px, 2.2vw, 36px)',
                       fontSize: 'clamp(0.6rem, 0.95vw, 0.95rem)',
@@ -579,22 +649,22 @@ export function PainelPrincipal({
                       idx={idx}
                       size="clamp(30px, 2.5vw, 40px)"
                     />
-                    <span className="font-semibold truncate" style={{ color: DARK_TEXT, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>
+                    <span className="font-semibold truncate" style={{ color: C.text, fontSize: 'clamp(0.7rem, 1.1vw, 1.1rem)' }}>
                       {nomeSolicitante(ticket)}
                     </span>
                   </div>
-                  <span className="truncate font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>
+                  <span className="truncate font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>
                     {textoDepartamentoOuTraco(ticket)}
                   </span>
-                  <span className="font-medium" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{formatDateTime(ticket.criadoEm)}</span>
+                  <span className="font-medium" style={{ color: C.textMuted, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{formatDateTime(ticket.criadoEm)}</span>
                   <div className="flex items-center gap-2">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLOR_BLUE }} />
-                    <span className="truncate" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{ticket.ferramenta}</span>
+                    <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: C.blue }} />
+                    <span className="truncate" style={{ color: C.textMuted, fontSize: 'clamp(0.6rem, 0.9vw, 0.9rem)' }}>{ticket.ferramenta}</span>
                   </div>
                 </div>
               ))}
               {fila.length === 0 && (
-                <div className="flex items-center justify-center flex-1" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>
+                <div className="flex items-center justify-center flex-1" style={{ color: C.textMuted, fontSize: 'clamp(0.7rem, 0.9vw, 0.9rem)' }}>
                   🎉 Fila vazia!
                 </div>
               )}
@@ -603,34 +673,27 @@ export function PainelPrincipal({
         </div>
 
         {/* ── Resumo por status ── */}
-        <div className="rounded-2xl overflow-hidden flex flex-col" style={cardStyle}>
-          <div className="shrink-0 flex items-center justify-center" style={{
-            background: HEADER_INFO_STATUS,
-            padding: 'clamp(6px, 0.8vh, 12px) 16px',
+        <div className="rounded-2xl overflow-hidden flex flex-col panel-card">
+          <div className="shrink-0 flex items-center justify-center panel-header" style={{
+            background: C.headerInfo,
           }}>
-            <h2 className="font-bold text-white tracking-wide" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.15rem)' }}>
+            <h2 className="panel-title">
               Resumo por status
             </h2>
           </div>
-          <div className="flex-1 flex items-center justify-center" style={{ padding: 'clamp(12px, 1.2vw, 20px)' }}>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5 w-full">
+          <div className="flex-1 flex items-center panel-body">
+            <div className="flex flex-col gap-2 w-full">
               {statusSummary.map(s => (
-                <div key={s.name} className="flex flex-col items-center text-center gap-2">
-                  <div className="rounded-full flex items-center justify-center" style={{
-                    width: 'clamp(34px, 3vw, 48px)', height: 'clamp(34px, 3vw, 48px)',
-                    background: `${s.color}15`,
-                    border: `1px solid ${s.color}25`,
-                    color: s.color,
-                  }}>
-                    {getStatusIcon(s.icon, 18)}
+                <div key={s.name} className="stat-row">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="stat-dot" style={{ backgroundColor: s.color }} aria-hidden />
+                    <span className="font-medium truncate" style={{ color: C.textMuted, fontSize: 'clamp(0.55rem, 0.75vw, 0.8rem)' }}>
+                      {s.name}
+                    </span>
                   </div>
-                  <p className="font-semibold leading-tight" style={{ color: DARK_TEXT_MUTED, fontSize: 'clamp(0.5rem, 0.7vw, 0.7rem)' }}>{s.name}</p>
-                  <div className="rounded-xl px-4 py-1" style={{
-                    background: `${s.color}18`,
-                    border: `1px solid ${s.color}35`,
-                  }}>
-                    <p className="font-black" style={{ color: s.color, fontSize: 'clamp(1.1rem, 1.8vw, 1.8rem)' }}>{s.value}</p>
-                  </div>
+                  <span className="font-black tabular-nums shrink-0" style={{ color: s.color, fontSize: 'clamp(1.1rem, 1.6vw, 1.5rem)' }}>
+                    {s.value}
+                  </span>
                 </div>
               ))}
             </div>
