@@ -216,8 +216,8 @@ export function PainelPrincipal({
 
   const statusSummary = useMemo(() => [
     { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: C.headerFila },
-    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: C.statusAguardando },
     { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: C.headerAndamento },
+    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: C.statusAguardando },
     { name: 'Concluídos', value: allTickets.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: C.headerAndamento },
   ], [allTickets]);
 
@@ -686,7 +686,15 @@ export function PainelPrincipal({
               {statusSummary.map(s => (
                 <div key={s.name} className="stat-row">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <span className="stat-dot" style={{ backgroundColor: s.color }} aria-hidden />
+                    {s.icon === 'check' ? (
+                      <CheckCircle2
+                        className="shrink-0"
+                        style={{ color: s.color, width: 'clamp(0.65rem, 0.85vw, 0.85rem)', height: 'clamp(0.65rem, 0.85vw, 0.85rem)' }}
+                        aria-hidden
+                      />
+                    ) : (
+                      <span className="stat-dot" style={{ backgroundColor: s.color }} aria-hidden />
+                    )}
                     <span className="font-medium truncate" style={{ color: C.textMuted, fontSize: 'clamp(0.55rem, 0.75vw, 0.8rem)' }}>
                       {s.name}
                     </span>

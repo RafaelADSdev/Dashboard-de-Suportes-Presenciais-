@@ -10,7 +10,6 @@ export interface PrioritizedTicket extends Ticket {
 /** Status que entram na fila de espera (inclui valores vindos do Bitrix). */
 export const FILA_STATUS = [
   'nova_solicitacao',
-  'aguardando_solicitante',
   'aguardando',
   'validar_ajuste',
 ] as const;
