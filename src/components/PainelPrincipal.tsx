@@ -19,6 +19,7 @@ import hubOnLogo from '@/assets/hub_on_branco.png';
 import backgroundVideo from '@/assets/hubon-background.mp4';
 import stuppLogo from '@/assets/sup_stupp_branco.png';
 import nascimentoLogo from '@/assets/diret_nascimento_branco.png';
+import qrSuportePresencial from '@/assets/qr-suporte-presencial.png';
 
 // Paleta alinhada a tokens em index.css (--dash-*)
 const C = {
@@ -210,16 +211,9 @@ export function PainelPrincipal({
 
   useEffect(() => {
     if (slides.length <= 1) return;
-    const interval = setInterval(() => setCurrentSlide(prev => (prev + 1) % slides.length), 4000);
+    const interval = setInterval(() => setCurrentSlide(prev => (prev + 1) % slides.length), 24000);
     return () => clearInterval(interval);
   }, [slides.length]);
-
-  const statusSummary = useMemo(() => [
-    { name: 'Nova solicitação', value: allTickets.filter(t => t.status === 'nova_solicitacao').length, icon: 'new', color: C.headerFila },
-    { name: 'Em atendimento', value: allTickets.filter(t => t.status === 'em_atendimento').length, icon: 'refresh', color: C.headerAndamento },
-    { name: 'Aguardando solicitante', value: allTickets.filter(t => t.status === 'aguardando_solicitante' || t.status === 'aguardando').length, icon: 'alert', color: C.statusAguardando },
-    { name: 'Concluídos', value: allTickets.filter(t => t.status === 'concluido' || t.status === 'finalizado').length, icon: 'check', color: C.headerAndamento },
-  ], [allTickets]);
 
   const addSlide = async () => {
     if (!newSlideTitle.trim() || !newSlideContent.trim() || slidesSaving) return;
@@ -672,39 +666,14 @@ export function PainelPrincipal({
           </div>
         </div>
 
-        {/* ── Resumo por status ── */}
+        {/* ── QR Code suporte ── */}
         <div className="rounded-2xl overflow-hidden flex flex-col panel-card">
-          <div className="shrink-0 flex items-center justify-center panel-header" style={{
-            background: C.headerInfo,
-          }}>
-            <h2 className="panel-title">
-              Resumo por status
-            </h2>
-          </div>
-          <div className="flex-1 flex items-center panel-body">
-            <div className="flex flex-col gap-2 w-full">
-              {statusSummary.map(s => (
-                <div key={s.name} className="stat-row">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    {s.icon === 'check' ? (
-                      <CheckCircle2
-                        className="shrink-0"
-                        style={{ color: s.color, width: 'clamp(0.65rem, 0.85vw, 0.85rem)', height: 'clamp(0.65rem, 0.85vw, 0.85rem)' }}
-                        aria-hidden
-                      />
-                    ) : (
-                      <span className="stat-dot" style={{ backgroundColor: s.color }} aria-hidden />
-                    )}
-                    <span className="font-medium truncate" style={{ color: C.textMuted, fontSize: 'clamp(0.55rem, 0.75vw, 0.8rem)' }}>
-                      {s.name}
-                    </span>
-                  </div>
-                  <span className="font-black tabular-nums shrink-0" style={{ color: s.color, fontSize: 'clamp(1.1rem, 1.6vw, 1.5rem)' }}>
-                    {s.value}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div className="flex-1 overflow-hidden flex items-center justify-center">
+            <img
+              src={qrSuportePresencial}
+              alt="Escaneie para solicitar suporte presencial"
+              className="h-full w-full object-contain"
+            />
           </div>
         </div>
       </div>
